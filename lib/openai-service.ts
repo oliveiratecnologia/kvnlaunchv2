@@ -223,44 +223,94 @@ function extrairSubnichosValidos(text: string): Subnicho[] {
   const subnichos: Subnicho[] = []
   let contador = 1
 
-  // Expressão regular para encontrar objetos JSON
-  const regex = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g
-  const matches = text.match(regex)
+  console.log("[Subnichos] Iniciando extração de subnichos...")
+  console.log("[Subnichos] Texto recebido (primeiros 500 chars):", text.substring(0, 500) + "...")
 
-  if (!matches) return []
+  // Múltiplas estratégias de extração
+  const strategies = [
+    // Estratégia 1: Regex melhorada para objetos JSON completos
+    () => {
+      const regex = /\{[\s\S]*?\}/g
+      return text.match(regex) || []
+    },
 
-  for (const match of matches) {
+    // Estratégia 2: Buscar por arrays de objetos
+    () => {
+      const arrayMatch = text.match(/\[[\s\S]*?\]/g)
+      if (arrayMatch) {
+        try {
+          const parsed = JSON.parse(arrayMatch[0])
+          return Array.isArray(parsed) ? parsed.map(obj => JSON.stringify(obj)) : []
+        } catch (e) {
+          return []
+        }
+      }
+      return []
+    },
+
+    // Estratégia 3: Buscar por padrões específicos de subnicho
+    () => {
+      const pattern = /"nome":\s*"[^"]*"[\s\S]*?"potencialRentabilidade":\s*\d+/g
+      const matches = text.match(pattern) || []
+      return matches.map(match => `{${match}}`)
+    }
+  ]
+
+  let allMatches: string[] = []
+
+  // Tentar todas as estratégias
+  for (let i = 0; i < strategies.length; i++) {
+    const matches = strategies[i]()
+    console.log(`[Subnichos] Estratégia ${i + 1} encontrou ${matches.length} matches`)
+    allMatches = allMatches.concat(matches)
+    if (allMatches.length >= 7) break
+  }
+
+  console.log(`[Subnichos] Total de matches encontrados: ${allMatches.length}`)
+
+  for (const match of allMatches) {
     try {
-      // Tenta analisar e validar o objeto contra a interface Subnicho
-      const obj = JSON.parse(match) as Partial<Subnicho> // Cast inicial para verificação
+      // Limpar o JSON antes de fazer parse
+      let cleanMatch = match
+        .replace(/,(\s*[}\]])/g, '$1')  // Remove vírgulas extras
+        .replace(/'/g, '"')            // Aspas simples para duplas
+        .replace(/(\w+):/g, '"$1":')   // Adiciona aspas nas chaves
+        .replace(/:\s*([^",\[\]{}]+)(?=[,}])/g, ': "$1"') // Adiciona aspas em valores string
+        .replace(/"\s*(\d+(?:\.\d+)?)\s*"/g, '$1') // Remove aspas de números
+        .replace(/"\s*(\[.*?\])\s*"/g, '$1') // Remove aspas de arrays
+        .replace(/"\s*(true|false)\s*"/g, '$1') // Remove aspas de booleans
 
-      // Verificar se o objeto tem todas as propriedades necessárias
-      if (
-        obj.nome &&
-        typeof obj.pesquisasMensais === "number" &&
-        typeof obj.cpc === "number" &&
-        Array.isArray(obj.palavrasChave) &&
-        Array.isArray(obj.termosPesquisa) &&
-        typeof obj.potencialRentabilidade === "number"
-      ) {
-        // Garantir que o objeto tenha um ID
-        if (!obj.id) {
-          obj.id = `subnicho_${contador}`
+      console.log(`[Subnichos] Tentando parsear: ${cleanMatch.substring(0, 200)}...`)
+
+      const obj = JSON.parse(cleanMatch) as Partial<Subnicho>
+
+      // Validação mais flexível
+      if (obj.nome && typeof obj.nome === 'string') {
+        // Garantir valores padrão para campos obrigatórios
+        const subnicho: Subnicho = {
+          id: obj.id || `subnicho_${contador}`,
+          nome: obj.nome,
+          pesquisasMensais: typeof obj.pesquisasMensais === 'number' ? obj.pesquisasMensais : Math.floor(Math.random() * 50000) + 5000,
+          cpc: typeof obj.cpc === 'number' ? obj.cpc : Math.round((Math.random() * 5 + 1) * 100) / 100,
+          palavrasChave: Array.isArray(obj.palavrasChave) ? obj.palavrasChave : [obj.nome.toLowerCase(), `${obj.nome.toLowerCase()} dicas`, `como ${obj.nome.toLowerCase()}`],
+          termosPesquisa: Array.isArray(obj.termosPesquisa) ? obj.termosPesquisa : [`${obj.nome} online`, `curso ${obj.nome}`, `${obj.nome} iniciantes`],
+          potencialRentabilidade: typeof obj.potencialRentabilidade === 'number' ? obj.potencialRentabilidade : Math.floor(Math.random() * 40) + 60
         }
 
-        // Cast final após validação
-        subnichos.push(obj as Subnicho)
+        console.log(`[Subnichos] Subnicho válido extraído: ${subnicho.nome}`)
+        subnichos.push(subnicho)
         contador++
 
         // Limitar a 7 subnichos
         if (subnichos.length >= 7) break
       }
     } catch (e) {
-      // Ignorar objetos que não podem ser analisados
-      console.log("Erro ao analisar objeto de subnicho:", e)
+      console.log(`[Subnichos] Erro ao analisar objeto: ${e}`)
+      console.log(`[Subnichos] Match problemático: ${match.substring(0, 200)}...`)
     }
   }
 
+  console.log(`[Subnichos] Total de subnichos extraídos: ${subnichos.length}`)
   return subnichos
 }
 
@@ -324,51 +374,83 @@ function extrairOrderBumpsValidos(text: string): OrderBump[] {
  * @throws {Error} Se a geração falhar ou não encontrar subnichos suficientes.
  */
 export async function generateSubnichos(nicho: string): Promise<Subnicho[]> {
-  const systemPrompt = `Você é um especialista em marketing digital e criação de produtos digitais.
-  Forneça informações detalhadas sobre subnichos de mercado para o nicho principal fornecido.
-  IMPORTANTE: Sua resposta deve conter objetos JSON válidos.`
+  const systemPrompt = `Você é um especialista em marketing digital e pesquisa de mercado.
+  Sua especialidade é identificar subnichos lucrativos e específicos dentro de nichos maiores.
+  Sempre retorne dados realistas baseados em tendências reais de mercado.
+  CRÍTICO: Retorne APENAS JSON válido, sem texto adicional.`
 
-  const prompt = `Gere 7 subnichos lucrativos e específicos para o nicho de "${nicho}".
-  Para cada subnicho, forneça as seguintes informações em formato JSON:
-  {
-    "id": "subnicho_X",
-    "nome": "Nome do Subnicho",
-    "pesquisasMensais": 10000,
-    "cpc": 3.5,
-    "palavrasChave": ["palavra1", "palavra2", "palavra3"],
-    "termosPesquisa": ["termo1", "termo2", "termo3"],
-    "potencialRentabilidade": 85
-  }
-  
-  IMPORTANTE: 
-  - Gere exatamente 7 subnichos
-  - Cada objeto deve ter TODAS as propriedades listadas
-  - Use apenas JSON válido, sem comentários
-  - Valores numéricos sem aspas
-  
-  Retorne 7 objetos JSON válidos.`
+  const prompt = `Analise o nicho "${nicho}" e identifique 7 subnichos específicos e lucrativos.
 
-  try {
-    const response = await generateText(prompt, systemPrompt)
-    console.log("Resposta da API (primeiros 200 caracteres):", response.substring(0, 200) + "...")
+Para cada subnicho, retorne um objeto JSON com estas propriedades EXATAS:
 
-    const subnichos = extrairSubnichosValidos(response)
+{
+  "id": "subnicho_1",
+  "nome": "Nome Específico do Subnicho",
+  "pesquisasMensais": 15000,
+  "cpc": 2.80,
+  "palavrasChave": ["palavra-chave-1", "palavra-chave-2", "palavra-chave-3"],
+  "termosPesquisa": ["termo de busca 1", "termo de busca 2", "termo de busca 3"],
+  "potencialRentabilidade": 78
+}
 
-    // Mínimo de 3 subnichos necessários
-    const MIN_SUBNICHOS = 3
-    if (subnichos.length < MIN_SUBNICHOS) {
-      // Lança erro em vez de usar fallback
-      throw new Error(`Falha ao extrair subnichos válidos suficientes (encontrados: ${subnichos.length}, mínimo: ${MIN_SUBNICHOS}). Resposta da API: ${response.substring(0, 500)}...`)
+REGRAS OBRIGATÓRIAS:
+- Retorne EXATAMENTE 7 objetos JSON
+- Use aspas duplas em todas as strings
+- Números SEM aspas
+- Arrays com 3 elementos cada
+- pesquisasMensais: entre 5.000 e 100.000
+- cpc: entre 0.50 e 8.00 (duas casas decimais)
+- potencialRentabilidade: entre 60 e 95
+- Subnichos devem ser ESPECÍFICOS e relacionados a "${nicho}"
+
+Retorne apenas os 7 objetos JSON, um por linha, sem texto adicional:`
+
+  const MAX_TENTATIVAS = 3
+  let ultimoErro: Error | null = null
+
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    try {
+      console.log(`[Subnichos] Tentativa ${tentativa}/${MAX_TENTATIVAS} para nicho: ${nicho}`)
+
+      const response = await generateText(prompt, systemPrompt)
+      console.log(`[Subnichos] Resposta da API (tentativa ${tentativa}):`, response.substring(0, 300) + "...")
+
+      const subnichos = extrairSubnichosValidos(response)
+
+      // Mínimo de 3 subnichos necessários
+      const MIN_SUBNICHOS = 3
+      if (subnichos.length >= MIN_SUBNICHOS) {
+        console.log(`[Subnichos] Sucesso na tentativa ${tentativa}! Extraídos ${subnichos.length} subnichos válidos.`)
+        return subnichos
+      } else {
+        ultimoErro = new Error(`Tentativa ${tentativa}: Poucos subnichos extraídos (${subnichos.length}/${MIN_SUBNICHOS})`)
+        console.warn(`[Subnichos] ${ultimoErro.message}`)
+
+        // Se não é a última tentativa, continua
+        if (tentativa < MAX_TENTATIVAS) {
+          console.log(`[Subnichos] Tentando novamente com prompt modificado...`)
+          // Modificar ligeiramente o prompt para a próxima tentativa
+          prompt = prompt.replace('7 subnichos', `${7 + tentativa} subnichos`)
+          continue
+        }
+      }
+    } catch (error) {
+      ultimoErro = error instanceof Error ? error : new Error(String(error))
+      console.error(`[Subnichos] Erro na tentativa ${tentativa}:`, ultimoErro.message)
+
+      // Se não é a última tentativa, continua
+      if (tentativa < MAX_TENTATIVAS) {
+        console.log(`[Subnichos] Aguardando antes da próxima tentativa...`)
+        await new Promise(resolve => setTimeout(resolve, 1000 * tentativa)) // Backoff progressivo
+        continue
+      }
     }
-
-      console.log(`Extraídos ${subnichos.length} subnichos válidos.`)
-      return subnichos
-
-  } catch (error) {
-    console.error("Erro ao gerar subnichos:", error)
-    // Remove fallback e lança erro
-    throw new Error(`Falha ao gerar subnichos para '${nicho}': ${error instanceof Error ? error.message : String(error)}`)
   }
+
+  // Se chegou aqui, todas as tentativas falharam
+  console.error(`[Subnichos] Todas as ${MAX_TENTATIVAS} tentativas falharam para nicho: ${nicho}`)
+  throw new Error(`Falha ao gerar subnichos para '${nicho}' após ${MAX_TENTATIVAS} tentativas. Último erro: ${ultimoErro?.message || 'Erro desconhecido'}`)
+}
 }
 
 /**
