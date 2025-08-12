@@ -306,11 +306,26 @@ export default function ProdutoPrincipalPage() {
     },
     onError: (error) => {
       console.error("Erro ao gerar PDF:", error);
+      console.error("Detalhes completos do erro:", JSON.stringify(error, null, 2));
+
+      // Extrair mensagem de erro mais específica
+      let errorMessage = "Não foi possível gerar o ebook PDF. Tente novamente.";
+
+      if (error.error?.serverError) {
+        errorMessage = `Erro no servidor: ${error.error.serverError}`;
+      } else if (error.error?.message) {
+        errorMessage = `Erro: ${error.error.message}`;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
       toast({
         title: "❌ Erro na Geração do PDF",
-        description: "Não foi possível gerar o ebook PDF. Tente novamente.",
+        description: errorMessage,
         variant: "destructive",
-        duration: 7000,
+        duration: 10000,
       });
     },
   });

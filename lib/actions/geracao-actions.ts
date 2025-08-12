@@ -321,10 +321,33 @@ export const gerarEbookPDFAction = action
 
         } catch (error) {
             console.error("[Action] Erro na geração do ebook PDF:", error);
+            console.error("[Action] Stack trace:", error instanceof Error ? error.stack : 'N/A');
+            console.error("[Action] Tipo do erro:", typeof error);
+            console.error("[Action] Erro serializado:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+
+            let errorMessage = "Erro desconhecido na geração do ebook PDF.";
+
             if (error instanceof Error) {
-                throw new Error(error.message);
-            } else {
-                throw new Error("Erro desconhecido na geração do ebook PDF.");
+                errorMessage = `Falha na geração do PDF: ${error.message}`;
+
+                // Verificar se é erro específico do Puppeteer
+                if (error.message.includes('Puppeteer') || error.message.includes('browser')) {
+                    errorMessage = `Erro no navegador: ${error.message}. Tente novamente em alguns segundos.`;
+                }
+                // Verificar se é erro de timeout
+                else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+                    errorMessage = `Timeout na geração: ${error.message}. O processo demorou muito para completar.`;
+                }
+                // Verificar se é erro de memória
+                else if (error.message.includes('memory') || error.message.includes('Memory')) {
+                    errorMessage = `Erro de memória: ${error.message}. Tente novamente.`;
+                }
+                // Verificar se é erro de OpenAI
+                else if (error.message.includes('OpenAI') || error.message.includes('API')) {
+                    errorMessage = `Erro na API: ${error.message}. Verifique sua conexão.`;
+                }
             }
+
+            throw new Error(errorMessage);
         }
     });

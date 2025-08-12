@@ -89,35 +89,51 @@ class PuppeteerPool {
 
   async getBrowser() {
     console.log(`[Puppeteer Pool] Solicitando browser. Pool size: ${this.pool.length}, Total: ${this.currentSize}`);
-    
-    // Se há browser disponível no pool, usar
-    if (this.pool.length > 0) {
-      const browser = this.pool.pop();
-      console.log(`[Puppeteer Pool] Browser reutilizado do pool`);
-      return browser;
-    }
 
-    // Se não atingiu o limite, criar novo
-    if (this.currentSize < this.maxSize) {
-      console.log(`[Puppeteer Pool] Criando novo browser`);
-      const puppeteer = (await import('puppeteer')).default;
-      
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu',
-          '--memory-pressure-off'
-        ]
-      });
-      
-      this.currentSize++;
-      return browser;
+    try {
+      // Se há browser disponível no pool, usar
+      if (this.pool.length > 0) {
+        const browser = this.pool.pop();
+        console.log(`[Puppeteer Pool] Browser reutilizado do pool`);
+
+        // Verificar se o browser ainda está conectado
+        if (browser && browser.isConnected()) {
+          return browser;
+        } else {
+          console.log(`[Puppeteer Pool] Browser desconectado, removendo do pool`);
+          this.currentSize = Math.max(0, this.currentSize - 1);
+        }
+      }
+
+      // Se não atingiu o limite, criar novo
+      if (this.currentSize < this.maxSize) {
+        console.log(`[Puppeteer Pool] Criando novo browser`);
+        const puppeteer = (await import('puppeteer')).default;
+
+        const browser = await puppeteer.launch({
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu',
+            '--memory-pressure-off',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor'
+          ],
+          timeout: 30000 // 30 segundos timeout
+        });
+
+        console.log(`[Puppeteer Pool] Browser criado com sucesso. Conectado: ${browser.isConnected()}`);
+        this.currentSize++;
+        return browser;
+      }
+    } catch (error) {
+      console.error(`[Puppeteer Pool] Erro ao criar/obter browser:`, error);
+      throw new Error(`Falha ao inicializar browser: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Se atingiu o limite, aguardar browser disponível

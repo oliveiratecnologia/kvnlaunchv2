@@ -665,6 +665,22 @@ export async function generateEbookPDF(structure: EbookStructure): Promise<Buffe
 
   } catch (error) {
     console.error("[PDF Generator] Erro ao gerar PDF:", error);
+    console.error("[PDF Generator] Stack trace:", error instanceof Error ? error.stack : 'N/A');
+    console.error("[PDF Generator] Tipo do erro:", typeof error);
+
+    // Log específico para diferentes tipos de erro
+    if (error instanceof Error) {
+      if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+        console.error("[PDF Generator] ERRO DE TIMEOUT - Processo demorou muito para completar");
+      } else if (error.message.includes('memory') || error.message.includes('Memory')) {
+        console.error("[PDF Generator] ERRO DE MEMÓRIA - Insuficiente para processar o PDF");
+      } else if (error.message.includes('browser') || error.message.includes('Puppeteer')) {
+        console.error("[PDF Generator] ERRO DO BROWSER - Problema com Puppeteer");
+      } else if (error.message.includes('Protocol error')) {
+        console.error("[PDF Generator] ERRO DE PROTOCOLO - Conexão com browser perdida");
+      }
+    }
+
     throw new Error(`Falha ao gerar PDF: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     if (browser) {
