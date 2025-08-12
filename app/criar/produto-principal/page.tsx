@@ -51,6 +51,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 // Importar a Server Action e o hook
 import { gerarProdutoPrincipalAction, gerarCopyPaginaVendasAction, gerarEbookPDFAction } from "@/lib/actions/geracao-actions"
 import { useAction } from "next-safe-action/hooks"
+import { EbookProgress } from "@/components/ui/ebook-progress"
 // Importar o tipo ProdutoPrincipal de @/types/openai
 import type { ProdutoPrincipal, Subnicho } from "@/types/openai"
 // Importar os componentes de loading compartilhados
@@ -123,6 +124,9 @@ export default function ProdutoPrincipalPage() {
   const [copyProgress, setCopyProgress] = useState(0)
   // Estado para armazenar o resultado da geração de PDF
   const [pdfResult, setPdfResult] = useState<{ downloadUrl: string; fileName: string } | null>(null)
+  // Estados para controlar o progresso do ebook
+  const [ebookJobId, setEbookJobId] = useState<string | null>(null)
+  const [showEbookProgress, setShowEbookProgress] = useState(false)
   
   const router = useRouter()
   const { toast } = useToast()
@@ -386,12 +390,16 @@ export default function ProdutoPrincipalPage() {
       const result = await response.json();
       console.log("Resultado:", result);
 
-      if (result.success) {
+      if (result.success && result.data?.jobId) {
+        // Ativar o sistema de progresso
+        setEbookJobId(result.data.jobId);
+        setShowEbookProgress(true);
+
         toast({
-          title: "✅ Job de Ebook Criado!",
-          description: `Job ID: ${result.jobId}. Processamento iniciado no DigitalOcean.`,
+          title: "✅ Geração de Ebook Iniciada!",
+          description: "Acompanhe o progresso em tempo real abaixo.",
           variant: "default",
-          duration: 10000,
+          duration: 5000,
         });
       } else {
         throw new Error(result.message || "Erro desconhecido");
@@ -407,6 +415,42 @@ export default function ProdutoPrincipalPage() {
       });
     }
   }, [produto, nicho, subnicho, toast]);
+
+  // Função chamada quando o ebook é concluído
+  const handleEbookComplete = useCallback((result: any) => {
+    console.log("Ebook concluído:", result);
+
+    if (result.downloadUrl) {
+      setPdfResult({
+        downloadUrl: result.downloadUrl,
+        fileName: result.fileName || 'ebook.pdf'
+      });
+
+      toast({
+        title: "🎉 Ebook Concluído!",
+        description: "Seu ebook foi gerado com sucesso. Clique no botão de download para baixar.",
+        variant: "default",
+        duration: 10000,
+      });
+    }
+
+    setShowEbookProgress(false);
+  }, [toast]);
+
+  // Função chamada quando há erro na geração
+  const handleEbookError = useCallback((error: string) => {
+    console.error("Erro na geração do ebook:", error);
+
+    toast({
+      title: "❌ Erro na Geração do Ebook",
+      description: error,
+      variant: "destructive",
+      duration: 10000,
+    });
+
+    setShowEbookProgress(false);
+    setEbookJobId(null);
+  }, [toast]);
 
   // Função para gerar detalhes do produto
   const gerarDetalhesProduto = useCallback((nicho: string, subnicho: Subnicho) => {
@@ -582,9 +626,14 @@ export default function ProdutoPrincipalPage() {
                 onClick={gerarEbookPDF}
                 variant="default"
                 className="text-sm bg-green-600 hover:bg-green-700"
-                disabled={!produto || statusGerarPDF === 'executing'}
+                disabled={!produto || statusGerarPDF === 'executing' || showEbookProgress}
             >
-                {statusGerarPDF === 'executing' ? (
+                {showEbookProgress ? (
+                    <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Gerando Ebook...
+                    </>
+                ) : statusGerarPDF === 'executing' ? (
                     <>
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                         Gerando PDF...
@@ -608,6 +657,44 @@ export default function ProdutoPrincipalPage() {
               <div>
                 <h3 className="font-semibold text-green-800">Ebook PDF Gerado com Sucesso!</h3>
                 <p className="text-sm text-green-600">Seu ebook de 30 páginas está pronto para download.</p>
+                <p className="text-xs text-green-500 mt-1">Arquivo: {pdfResult.fileName}</p>
+              </div>
+            </div>
+            <Button
+              onClick={() => {
+                if (pdfResult?.downloadUrl) {
+                  window.open(pdfResult.downloadUrl, '_blank');
+                }
+              }}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Baixar PDF
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Componente de progresso do ebook */}
+      {showEbookProgress && ebookJobId && (
+        <div className="mt-6">
+          <EbookProgress
+            jobId={ebookJobId}
+            onComplete={handleEbookComplete}
+            onError={handleEbookError}
+          />
+        </div>
+      )}
+
+      {/* Seção de resultado da geração de PDF via DigitalOcean */}
+      {pdfResult && !showEbookProgress && (
+        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Download className="h-5 w-5 text-green-600 mr-2" />
+              <div>
+                <h3 className="font-semibold text-green-800">Ebook PDF Gerado com Sucesso!</h3>
+                <p className="text-sm text-green-600">Seu ebook está pronto para download.</p>
                 <p className="text-xs text-green-500 mt-1">Arquivo: {pdfResult.fileName}</p>
               </div>
             </div>

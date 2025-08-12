@@ -247,17 +247,56 @@ app.get('/api/ebooks/status/:jobId', authenticateAPI, async (req, res) => {
     
     const state = await job.getState();
     
+    // Calcular progresso mais detalhado
+    let detailedProgress = job.progress || 0;
+    let progressDescription = '';
+    let estimatedTimeRemaining = null;
+
+    // Adicionar informações específicas por fila
+    if (queueName === 'content-generation') {
+      progressDescription = state === 'active' ? 'Gerando estrutura e conteúdo...' :
+                           state === 'completed' ? 'Conteúdo gerado com sucesso' :
+                           'Aguardando processamento';
+    } else if (queueName === 'pdf-generation') {
+      progressDescription = state === 'active' ? 'Criando PDF do ebook...' :
+                           state === 'completed' ? 'PDF criado com sucesso' :
+                           'Aguardando criação do PDF';
+    } else if (queueName === 'file-upload') {
+      progressDescription = state === 'active' ? 'Fazendo upload para armazenamento...' :
+                           state === 'completed' ? 'Upload concluído' :
+                           'Aguardando upload';
+    }
+
+    // Calcular tempo estimado baseado no tempo decorrido
+    if (job.timestamp && state === 'active') {
+      const elapsed = Date.now() - job.timestamp;
+      const estimatedTotal = elapsed / (detailedProgress / 100);
+      const remaining = estimatedTotal - elapsed;
+
+      if (remaining > 0 && detailedProgress > 0) {
+        estimatedTimeRemaining = Math.ceil(remaining / 1000); // em segundos
+      }
+    }
+
     const jobStatus = {
       id: job.id,
       status: state,
       queue: queueName,
-      progress: job.progress || 0,
+      progress: detailedProgress,
+      progressDescription,
+      estimatedTimeRemaining,
       data: job.data,
       result: job.returnvalue,
       error: job.failedReason,
       createdAt: job.timestamp,
       processedAt: job.processedOn,
       finishedAt: job.finishedOn,
+      // Adicionar informações sobre jobs relacionados
+      relatedJobs: {
+        contentJobId: `ebook-${job.data?.requestId}`,
+        pdfJobId: `pdf-${job.data?.requestId}`,
+        uploadJobId: `upload-${job.data?.requestId}`
+      }
     };
     
     log(`Status consultado para job: ${jobId} - ${state}`, colors.blue);
