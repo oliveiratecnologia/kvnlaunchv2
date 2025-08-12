@@ -451,7 +451,6 @@ Retorne apenas os 7 objetos JSON, um por linha, sem texto adicional:`
   console.error(`[Subnichos] Todas as ${MAX_TENTATIVAS} tentativas falharam para nicho: ${nicho}`)
   throw new Error(`Falha ao gerar subnichos para '${nicho}' após ${MAX_TENTATIVAS} tentativas. Último erro: ${ultimoErro?.message || 'Erro desconhecido'}`)
 }
-}
 
 /**
  * Verifica se um produto gerado atende aos critérios de qualidade
