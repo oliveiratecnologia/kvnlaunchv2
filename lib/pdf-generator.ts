@@ -132,18 +132,42 @@ Retorne em formato JSON válido:
   ],
   "conclusao": "CONTEÚDO COMPLETO DA CONCLUSÃO COM EXATAMENTE 700-800 PALAVRAS",
   "totalPaginas": 30
-}`;
+}
+
+CRÍTICO: Retorne APENAS o JSON válido acima.
+- Use APENAS aspas duplas (")
+- NÃO use vírgulas extras antes de } ou ]
+- NÃO inclua quebras de linha dentro de strings
+- NÃO adicione texto antes ou depois do JSON`;
 
   try {
     console.log(`[PDF Generator] Gerando estrutura do ebook: ${data.nome}`);
     const response = await generateText(prompt, systemPrompt);
-    
+
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error("Estrutura JSON não encontrada na resposta");
     }
 
-    const structure = JSON.parse(jsonMatch[0]) as EbookStructure;
+    // Limpar e corrigir JSON malformado
+    let jsonString = jsonMatch[0];
+
+    // Corrigir problemas comuns de JSON
+    jsonString = jsonString
+      // Remover vírgulas extras antes de } ou ]
+      .replace(/,(\s*[}\]])/g, '$1')
+      // Corrigir aspas simples para duplas
+      .replace(/'/g, '"')
+      // Remover quebras de linha dentro de strings
+      .replace(/"\s*\n\s*"/g, '" "')
+      // Corrigir vírgulas ausentes entre elementos de array
+      .replace(/"\s*\n\s*"/g, '", "')
+      // Remover caracteres de controle
+      .replace(/[\x00-\x1F\x7F]/g, '');
+
+    console.log(`[PDF Generator] JSON limpo (primeiros 500 chars): ${jsonString.substring(0, 500)}...`);
+
+    const structure = JSON.parse(jsonString) as EbookStructure;
     
     // Validação básica
     if (!structure.titulo || !structure.introducao || !structure.capitulos || structure.capitulos.length === 0) {
@@ -155,6 +179,38 @@ Retorne em formato JSON válido:
 
   } catch (error) {
     console.error("[PDF Generator] Erro ao gerar estrutura:", error);
+
+    // Se for erro de JSON, tentar uma segunda abordagem
+    if (error instanceof SyntaxError && error.message.includes('JSON')) {
+      console.log('[PDF Generator] Tentando abordagem alternativa para JSON malformado...');
+
+      try {
+        const response = await generateText(prompt, systemPrompt);
+
+        // Tentar extrair JSON de forma mais agressiva
+        const jsonMatches = response.match(/\{[\s\S]*?\}/g);
+        if (jsonMatches && jsonMatches.length > 0) {
+          // Pegar o maior JSON encontrado
+          const largestJson = jsonMatches.reduce((a, b) => a.length > b.length ? a : b);
+
+          // Limpeza mais agressiva
+          let cleanJson = largestJson
+            .replace(/,\s*([}\]])/g, '$1')  // Remove vírgulas extras
+            .replace(/([{\[,]\s*)"(\w+)":/g, '$1"$2":')  // Garante aspas nas chaves
+            .replace(/:\s*"([^"]*?)"\s*([,}\]])/g, ': "$1"$2')  // Garante aspas nos valores
+            .replace(/\n/g, ' ')  // Remove quebras de linha
+            .replace(/\s+/g, ' ')  // Normaliza espaços
+            .trim();
+
+          const structure = JSON.parse(cleanJson) as EbookStructure;
+          console.log(`[PDF Generator] Estrutura recuperada com ${structure.capitulos?.length || 0} capítulos`);
+          return structure;
+        }
+      } catch (retryError) {
+        console.error('[PDF Generator] Falha na tentativa de recuperação:', retryError);
+      }
+    }
+
     throw new Error(`Falha ao gerar estrutura do ebook: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
