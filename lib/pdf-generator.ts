@@ -734,23 +734,68 @@ export async function generateCompleteEbook(data: EbookData): Promise<Buffer> {
   let puppeteerTime = 0;
   let uploadTime = 0;
 
+  // Função para logging com checkpoint
+  const logCheckpoint = (checkpoint: string, logData?: any) => {
+    const elapsed = performance.now() - totalStartTime;
+    console.log(`[${jobId}] PDF_GEN_CHECKPOINT ${checkpoint} (+${elapsed.toFixed(2)}ms):`, logData || '');
+  };
+
   try {
-    console.log(`[PDF Generator] Iniciando geração completa do ebook: ${data.nome} (Job: ${jobId})`);
+    logCheckpoint("A_INICIO", { nome: data.nome, nicho: data.nicho });
 
     // 1. Gerar estrutura do ebook (OpenAI)
+    logCheckpoint("B_OPENAI_INICIO");
     const openaiStartTime = performance.now();
-    const structure = await generateEbookStructure(data);
-    openaiTime = performance.now() - openaiStartTime;
-    console.log(`[PDF Generator] Estrutura gerada em ${openaiTime.toFixed(2)}ms`);
+    let structure;
+
+    try {
+      structure = await generateEbookStructure(data);
+      openaiTime = performance.now() - openaiStartTime;
+      logCheckpoint("B_OPENAI_SUCESSO", {
+        time: openaiTime.toFixed(2),
+        capitulos: structure.capitulos?.length || 0,
+        tituloLength: structure.titulo?.length || 0
+      });
+    } catch (openaiError) {
+      logCheckpoint("B_OPENAI_ERRO", {
+        error: openaiError instanceof Error ? openaiError.message : String(openaiError),
+        time: (performance.now() - openaiStartTime).toFixed(2)
+      });
+      throw new Error(`Falha na geração da estrutura OpenAI: ${openaiError instanceof Error ? openaiError.message : String(openaiError)}`);
+    }
 
     // 2. Validar estrutura
-    validateEbookStructure(structure);
+    logCheckpoint("C_VALIDACAO_INICIO");
+    try {
+      validateEbookStructure(structure);
+      logCheckpoint("C_VALIDACAO_SUCESSO");
+    } catch (validationError) {
+      logCheckpoint("C_VALIDACAO_ERRO", {
+        error: validationError instanceof Error ? validationError.message : String(validationError)
+      });
+      throw new Error(`Estrutura inválida: ${validationError instanceof Error ? validationError.message : String(validationError)}`);
+    }
 
     // 3. Gerar PDF (Puppeteer)
+    logCheckpoint("D_PUPPETEER_INICIO");
     const puppeteerStartTime = performance.now();
-    const pdfBuffer = await generateEbookPDF(structure);
-    puppeteerTime = performance.now() - puppeteerStartTime;
-    console.log(`[PDF Generator] PDF gerado em ${puppeteerTime.toFixed(2)}ms`);
+    let pdfBuffer;
+
+    try {
+      pdfBuffer = await generateEbookPDF(structure);
+      puppeteerTime = performance.now() - puppeteerStartTime;
+      logCheckpoint("D_PUPPETEER_SUCESSO", {
+        time: puppeteerTime.toFixed(2),
+        bufferSize: pdfBuffer.length,
+        bufferSizeMB: (pdfBuffer.length / 1024 / 1024).toFixed(2)
+      });
+    } catch (puppeteerError) {
+      logCheckpoint("D_PUPPETEER_ERRO", {
+        error: puppeteerError instanceof Error ? puppeteerError.message : String(puppeteerError),
+        time: (performance.now() - puppeteerStartTime).toFixed(2)
+      });
+      throw new Error(`Falha na geração do PDF Puppeteer: ${puppeteerError instanceof Error ? puppeteerError.message : String(puppeteerError)}`);
+    }
 
     const totalTime = performance.now() - totalStartTime;
 

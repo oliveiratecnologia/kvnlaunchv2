@@ -271,8 +271,30 @@ export const gerarEbookPDFAction = action
         persona: z.any().optional()
     }))
     .action(async ({ parsedInput }) => {
+        const startTime = Date.now();
+        const sessionId = `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Função para logging com checkpoint
+        const logCheckpoint = (checkpoint: string, data?: any) => {
+            const elapsed = Date.now() - startTime;
+            console.log(`[${sessionId}] CHECKPOINT ${checkpoint} (+${elapsed}ms):`, data || '');
+        };
+
         try {
-            console.log("[Action] Iniciando geração de ebook PDF:", parsedInput.nome);
+            logCheckpoint("1_INICIO", { nome: parsedInput.nome, nicho: parsedInput.nicho });
+
+            // Validação detalhada dos dados de entrada
+            logCheckpoint("2_VALIDACAO_INICIO");
+
+            if (!parsedInput.nome || parsedInput.nome.trim().length === 0) {
+                throw new Error("Nome do produto é obrigatório");
+            }
+            if (!parsedInput.descricao || parsedInput.descricao.trim().length === 0) {
+                throw new Error("Descrição do produto é obrigatória");
+            }
+            if (!parsedInput.nicho || parsedInput.nicho.trim().length === 0) {
+                throw new Error("Nicho é obrigatório");
+            }
 
             const ebookData: EbookData = {
                 nome: parsedInput.nome,
@@ -282,34 +304,80 @@ export const gerarEbookPDFAction = action
                 persona: parsedInput.persona
             };
 
+            logCheckpoint("2_VALIDACAO_SUCESSO", {
+                nomeLength: ebookData.nome.length,
+                descricaoLength: ebookData.descricao.length,
+                hasPersona: !!ebookData.persona
+            });
+
             // Gerar o ebook completo
-            const pdfBuffer = await generateCompleteEbook(ebookData);
+            logCheckpoint("3_GERACAO_EBOOK_INICIO");
+            let pdfBuffer: Buffer;
+
+            try {
+                pdfBuffer = await generateCompleteEbook(ebookData);
+                logCheckpoint("3_GERACAO_EBOOK_SUCESSO", {
+                    bufferSize: pdfBuffer.length,
+                    bufferSizeMB: (pdfBuffer.length / 1024 / 1024).toFixed(2)
+                });
+            } catch (ebookError) {
+                logCheckpoint("3_GERACAO_EBOOK_ERRO", {
+                    error: ebookError instanceof Error ? ebookError.message : String(ebookError),
+                    stack: ebookError instanceof Error ? ebookError.stack : 'N/A'
+                });
+                throw new Error(`Falha na geração do ebook: ${ebookError instanceof Error ? ebookError.message : String(ebookError)}`);
+            }
 
             // Gerar nome do arquivo
+            logCheckpoint("4_PREPARACAO_UPLOAD");
             const fileName = `${parsedInput.nome.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`;
             const filePath = `ebooks/${fileName}`;
 
-            console.log(`[Action] Salvando PDF no Supabase Storage: ${filePath}`);
+            logCheckpoint("4_UPLOAD_INICIO", { fileName, filePath });
 
             // Upload para Supabase Storage
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('ebooks')
-                .upload(filePath, pdfBuffer, {
-                    contentType: 'application/pdf',
-                    cacheControl: '3600'
-                });
+            let uploadData, uploadError;
+            try {
+                const uploadResult = await supabase.storage
+                    .from('ebooks')
+                    .upload(filePath, pdfBuffer, {
+                        contentType: 'application/pdf',
+                        cacheControl: '3600'
+                    });
 
-            if (uploadError) {
-                console.error('[Action] Erro no upload:', uploadError);
-                throw new Error(`Erro ao salvar o ebook: ${uploadError.message}`);
+                uploadData = uploadResult.data;
+                uploadError = uploadResult.error;
+
+                if (uploadError) {
+                    logCheckpoint("4_UPLOAD_ERRO", {
+                        error: uploadError.message,
+                        code: uploadError.name || 'UNKNOWN'
+                    });
+                    throw new Error(`Erro no upload para Supabase: ${uploadError.message}`);
+                }
+
+                logCheckpoint("4_UPLOAD_SUCESSO", { uploadPath: uploadData?.path });
+
+            } catch (uploadException) {
+                logCheckpoint("4_UPLOAD_EXCEPTION", {
+                    error: uploadException instanceof Error ? uploadException.message : String(uploadException)
+                });
+                throw new Error(`Falha no upload: ${uploadException instanceof Error ? uploadException.message : String(uploadException)}`);
             }
 
             // Gerar URL pública
+            logCheckpoint("5_URL_PUBLICA_INICIO");
             const { data: urlData } = supabase.storage
                 .from('ebooks')
                 .getPublicUrl(filePath);
 
-            console.log(`[Action] Ebook PDF gerado com sucesso: ${urlData.publicUrl}`);
+            logCheckpoint("5_URL_PUBLICA_SUCESSO", { publicUrl: urlData.publicUrl });
+
+            logCheckpoint("6_SUCESSO_FINAL", {
+                fileName,
+                downloadUrl: urlData.publicUrl,
+                totalTime: Date.now() - startTime
+            });
 
             return {
                 success: true,
@@ -320,34 +388,52 @@ export const gerarEbookPDFAction = action
             };
 
         } catch (error) {
-            console.error("[Action] Erro na geração do ebook PDF:", error);
-            console.error("[Action] Stack trace:", error instanceof Error ? error.stack : 'N/A');
-            console.error("[Action] Tipo do erro:", typeof error);
-            console.error("[Action] Erro serializado:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+            const totalTime = Date.now() - startTime;
+            logCheckpoint("ERROR_FINAL", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : 'N/A',
+                type: typeof error,
+                totalTime
+            });
+
+            console.error(`[${sessionId}] ERRO CRÍTICO na geração do ebook PDF:`, error);
+            console.error(`[${sessionId}] Stack trace:`, error instanceof Error ? error.stack : 'N/A');
+            console.error(`[${sessionId}] Tipo do erro:`, typeof error);
+            console.error(`[${sessionId}] Erro serializado:`, JSON.stringify(error, Object.getOwnPropertyNames(error)));
+            console.error(`[${sessionId}] Tempo total até erro: ${totalTime}ms`);
 
             let errorMessage = "Erro desconhecido na geração do ebook PDF.";
+            let errorCategory = "UNKNOWN";
 
             if (error instanceof Error) {
-                errorMessage = `Falha na geração do PDF: ${error.message}`;
-
-                // Verificar se é erro específico do Puppeteer
-                if (error.message.includes('Puppeteer') || error.message.includes('browser')) {
+                // Categorizar o erro para melhor debugging
+                if (error.message.includes('Falha na geração do ebook')) {
+                    errorCategory = "EBOOK_GENERATION";
+                    errorMessage = `Erro na geração da estrutura: ${error.message}`;
+                } else if (error.message.includes('Puppeteer') || error.message.includes('browser')) {
+                    errorCategory = "PUPPETEER";
                     errorMessage = `Erro no navegador: ${error.message}. Tente novamente em alguns segundos.`;
-                }
-                // Verificar se é erro de timeout
-                else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+                } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+                    errorCategory = "TIMEOUT";
                     errorMessage = `Timeout na geração: ${error.message}. O processo demorou muito para completar.`;
-                }
-                // Verificar se é erro de memória
-                else if (error.message.includes('memory') || error.message.includes('Memory')) {
+                } else if (error.message.includes('memory') || error.message.includes('Memory')) {
+                    errorCategory = "MEMORY";
                     errorMessage = `Erro de memória: ${error.message}. Tente novamente.`;
-                }
-                // Verificar se é erro de OpenAI
-                else if (error.message.includes('OpenAI') || error.message.includes('API')) {
+                } else if (error.message.includes('OpenAI') || error.message.includes('API')) {
+                    errorCategory = "API";
                     errorMessage = `Erro na API: ${error.message}. Verifique sua conexão.`;
+                } else if (error.message.includes('Supabase') || error.message.includes('upload')) {
+                    errorCategory = "STORAGE";
+                    errorMessage = `Erro no armazenamento: ${error.message}. Tente novamente.`;
+                } else {
+                    errorCategory = "GENERIC";
+                    errorMessage = `Falha na geração do PDF: ${error.message}`;
                 }
             }
 
-            throw new Error(errorMessage);
+            console.error(`[${sessionId}] CATEGORIA DO ERRO: ${errorCategory}`);
+            console.error(`[${sessionId}] MENSAGEM FINAL: ${errorMessage}`);
+
+            throw new Error(`[${errorCategory}] ${errorMessage}`);
         }
     });
