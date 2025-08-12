@@ -87,6 +87,24 @@ const authenticateAPI = (req, res, next) => {
   next();
 };
 
+// Endpoint raiz - Informações da API (público)
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    service: 'DigitalOcean Ebook Generator API',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    endpoints: {
+      health: '/health',
+      test: '/api/test',
+      generate: '/api/ebooks/generate (POST)',
+      status: '/api/ebooks/status/:jobId (GET)'
+    },
+    documentation: 'https://github.com/oliveiratecnologia/kvnlaunchv2'
+  });
+});
+
 // Health check endpoint (público)
 app.get('/health', async (req, res) => {
   try {
