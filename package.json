@@ -1,7 +1,14 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "ebook-generator-system",
+  "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=18.17.0",
+    "npm": ">=9.0.0"
+  },
+  "npmrc": {
+    "legacy-peer-deps": true
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -52,7 +59,7 @@
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "cors": "^2.8.5",
-    "date-fns": "4.1.0",
+    "date-fns": "^3.6.0",
     "dotenv": "^17.2.1",
     "embla-carousel-react": "8.5.1",
     "express": "^5.1.0",
@@ -64,7 +71,7 @@
     "next-themes": "latest",
     "puppeteer": "^23.9.0",
     "react": "^19",
-    "react-day-picker": "8.10.1",
+    "react-day-picker": "^9.1.3",
     "react-dom": "^19",
     "react-hook-form": "latest",
     "react-resizable-panels": "^2.1.7",
