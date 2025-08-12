@@ -330,8 +330,8 @@ export default function ProdutoPrincipalPage() {
     },
   });
 
-  // Função para gerar PDF do ebook
-  const gerarEbookPDF = useCallback(() => {
+  // Função para gerar PDF do ebook via DigitalOcean Backend
+  const gerarEbookPDF = useCallback(async () => {
     if (!produto) {
       toast({
         title: "⚠️ Produto Necessário",
@@ -342,14 +342,71 @@ export default function ProdutoPrincipalPage() {
     }
 
     console.log("Iniciando geração de ebook PDF...");
-    executeGerarPDF({
-      nome: produto.nome,
-      descricao: produto.descricao,
-      nicho: nicho || "",
-      subnicho: subnicho?.nome || "",
-      persona: produto.persona
-    });
-  }, [produto, nicho, subnicho, executeGerarPDF, toast]);
+    console.log("Enviando para DigitalOcean Backend...");
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ebook-generator-backend-hzepb.ondigitalocean.app';
+      const endpoint = `${apiUrl}/api/ebooks/generate`;
+
+      console.log("Endpoint:", endpoint);
+
+      const requestData = {
+        userId: "user-vercel-frontend",
+        ebookData: {
+          titulo: produto.nome,
+          categoria: nicho || "Geral",
+          numeroCapitulos: 7,
+          detalhesAdicionais: {
+            descricao: produto.descricao,
+            subnicho: subnicho?.nome || "",
+            persona: produto.persona
+          }
+        }
+      };
+
+      console.log("Dados da requisição:", requestData);
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': 'ebook-api-secret-2025-digitalocean'
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      console.log("Response status:", response.status);
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error("Erro na resposta:", errorData);
+        throw new Error(`Erro ${response.status}: ${errorData}`);
+      }
+
+      const result = await response.json();
+      console.log("Resultado:", result);
+
+      if (result.success) {
+        toast({
+          title: "✅ Job de Ebook Criado!",
+          description: `Job ID: ${result.jobId}. Processamento iniciado no DigitalOcean.`,
+          variant: "default",
+          duration: 10000,
+        });
+      } else {
+        throw new Error(result.message || "Erro desconhecido");
+      }
+
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      toast({
+        title: "❌ Erro na Geração do PDF",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+        duration: 10000,
+      });
+    }
+  }, [produto, nicho, subnicho, toast]);
 
   // Função para gerar detalhes do produto
   const gerarDetalhesProduto = useCallback((nicho: string, subnicho: Subnicho) => {
