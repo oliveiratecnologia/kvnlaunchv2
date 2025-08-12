@@ -113,7 +113,7 @@ export function handleApiError(error: unknown): NextResponse {
         error: {
           code: ErrorCode.VALIDATION_ERROR,
           message: 'Dados inválidos',
-          details: error.errors
+          details: error.issues
         }
       },
       { status: 400 }

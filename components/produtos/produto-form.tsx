@@ -24,13 +24,11 @@ const produtoFormSchema = z.object({
     .max(500, {
       message: "A descrição não pode ter mais de 500 caracteres.",
     }),
-  preco: z.coerce.number().min(0.01, {
+  preco: z.number().min(0.01, {
     message: "O preço deve ser maior que zero.",
   }),
-  categoria: z.string({
-    required_error: "Selecione uma categoria.",
-  }),
-  estoque: z.coerce.number().int().min(0, {
+  categoria: z.string().min(1, "Selecione uma categoria."),
+  estoque: z.number().int().min(0, {
     message: "O estoque não pode ser negativo.",
   }),
 })

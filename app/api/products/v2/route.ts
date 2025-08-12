@@ -92,10 +92,10 @@ export async function GET(request: NextRequest) {
     
     if (err instanceof z.ZodError) {
       return NextResponse.json(
-        { 
+        {
           success: false,
           error: 'Parâmetros inválidos',
-          details: err.errors 
+          details: err.issues
         },
         { status: 400 }
       )
