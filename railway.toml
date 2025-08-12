@@ -1,0 +1,34 @@
+# railway.toml
+# Configuração do Railway para Arquitetura Híbrida
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.workers"
+
+[deploy]
+numReplicas = 2
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+region = "us-east4"
+
+# Configurações específicas para workers
+[[services]]
+name = "ebook-workers"
+dockerfile = "Dockerfile.workers"
+
+[services.healthcheck]
+path = "/health"
+port = 3001
+initialDelaySeconds = 30
+periodSeconds = 10
+
+# Configurações específicas para API Gateway
+[[services]]
+name = "api-gateway"
+dockerfile = "Dockerfile.api"
+
+[services.healthcheck]
+path = "/health"
+port = 3000
+initialDelaySeconds = 15
+periodSeconds = 10

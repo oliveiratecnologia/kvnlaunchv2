@@ -1,0 +1,36 @@
+# Dockerfile.workers
+# Dockerfile para os Workers BullMQ no Railway
+
+FROM node:18-alpine
+
+# Instalar dependências do sistema
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Configurar Puppeteer para usar Chromium instalado
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Criar diretório de trabalho
+WORKDIR /app
+
+# Copiar arquivos de dependências específicos do Railway
+COPY package-railway.json ./package.json
+
+# Instalar dependências
+RUN npm install --production
+
+# Copiar código fonte necessário
+COPY workers/railway-workers-simple.js ./
+
+# Expor porta para health check
+EXPOSE 3001
+
+# Comando para iniciar workers
+CMD ["node", "railway-workers-simple.js"]

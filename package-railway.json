@@ -1,0 +1,24 @@
+{
+  "name": "ebook-generator-railway-workers",
+  "version": "1.0.0",
+  "description": "Workers BullMQ para geração de ebooks - Railway",
+  "main": "dist/workers/railway-workers.js",
+  "scripts": {
+    "build": "tsc --build",
+    "start": "node dist/workers/railway-workers.js",
+    "start:api": "node dist/api/railway-gateway.js",
+    "dev": "tsx workers/railway-workers.ts",
+    "dev:api": "tsx api/railway-gateway.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/express": "^5.0.3",
+    "@types/cors": "^2.8.19",
+    "typescript": "^5.9.2",
+    "tsx": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

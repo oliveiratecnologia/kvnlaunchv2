@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.OPENAI_MAX_RETRIES = exports.OPENAI_TIMEOUT = exports.OPENAI_TEMPERATURE = exports.OPENAI_MAX_TOKENS = exports.OPENAI_API_URL = exports.OPENAI_MODEL = exports.OPENAI_API_KEY = void 0;
+exports.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+exports.OPENAI_MODEL = "gpt-4o-mini";
+exports.OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+exports.OPENAI_MAX_TOKENS = 1500;
+exports.OPENAI_TEMPERATURE = 0.7;
+exports.OPENAI_TIMEOUT = 60000;
+exports.OPENAI_MAX_RETRIES = 2;

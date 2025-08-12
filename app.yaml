@@ -1,0 +1,91 @@
+# DigitalOcean App Platform Configuration
+# Sistema de Geração de Ebooks - Workers BullMQ + API Gateway
+
+name: ebook-generator-system
+region: nyc
+
+# Variáveis de ambiente compartilhadas
+envs:
+  - key: NODE_ENV
+    value: production
+  - key: REDIS_URL
+    value: rediss://default:AVNS_lYle9myZMLH1ZazBhlS@ebook-redis-valkey-do-user-24250021-0.m.db.ondigitalocean.com:25061
+  - key: PORT
+    value: "3000"
+  - key: SUPABASE_URL
+    value: "https://ieyreghtisdwsscfjbik.supabase.co"
+    scope: RUN_TIME
+  - key: SUPABASE_ANON_KEY
+    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImleeXJlZ2h0aXNkd3NzY2ZqYmlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI5NzI5NzQsImV4cCI6MjAzODU0ODk3NH0.Ej6Ej6Ej6Ej6Ej6Ej6Ej6Ej6Ej6Ej6Ej6Ej6Ej6Ej6"
+    scope: RUN_TIME
+    type: SECRET
+  - key: SUPABASE_SERVICE_ROLE_KEY
+    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImleeXJlZ2h0aXNkd3NzY2ZqYmlrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyMjk3Mjk3NCwiZXhwIjoyMDM4NTQ4OTc0fQ.SERVICE_ROLE_KEY_HERE"
+    scope: RUN_TIME
+    type: SECRET
+  - key: OPENAI_API_KEY
+    value: "sk-proj-YOUR_OPENAI_KEY_HERE"
+    scope: RUN_TIME
+    type: SECRET
+  - key: API_SECRET_KEY
+    value: "ebook-api-secret-2025-digitalocean"
+    scope: RUN_TIME
+    type: SECRET
+
+services:
+  # API Gateway - Web Service (ÚNICO com rotas HTTP)
+  - name: api-gateway
+    source_dir: /
+    github:
+      repo: oliveiratecnologia/criador-de-produto-main
+      branch: main
+      deploy_on_push: true
+    build_command: npm install --production
+    run_command: node api/digitalocean-gateway.js
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 3000
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 30
+      period_seconds: 10
+      timeout_seconds: 5
+      failure_threshold: 3
+      success_threshold: 2
+    routes:
+      - path: /
+    cors:
+      allow_origins:
+        - exact: https://criador-de-produto-main.vercel.app
+        - exact: https://closify.com
+        - regex: https://.*\.vercel\.app
+      allow_methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      allow_headers:
+        - Content-Type
+        - Authorization
+        - X-API-Key
+      allow_credentials: true
+
+workers:
+  # Workers BullMQ - Background Workers (SEM rotas HTTP)
+  - name: ebook-workers
+    source_dir: /
+    github:
+      repo: oliveiratecnologia/criador-de-produto-main
+      branch: main
+      deploy_on_push: true
+    build_command: npm install --production
+    run_command: node workers/digitalocean-workers.js
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs
+
+# Configurações de build são definidas por serviço
+# Domínios serão gerados automaticamente pelo DigitalOcean
