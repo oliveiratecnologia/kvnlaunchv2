@@ -1,5 +1,5 @@
 # DigitalOcean App Platform Configuration
-# Sistema de Geração de Ebooks - Workers BullMQ + API Gateway
+# Sistema de Geração de Ebooks - Full Stack (Frontend + API + Workers)
 
 name: ebook-generator-system
 region: nyc
@@ -31,21 +31,47 @@ envs:
     value: "ebook-api-secret-2025-digitalocean"
     scope: RUN_TIME
     type: SECRET
+  - key: NEXT_PUBLIC_API_URL
+    value: "/api"
+    scope: RUN_AND_BUILD_TIME
 
 services:
-  # API Gateway - Web Service (ÚNICO com rotas HTTP)
-  - name: api-gateway
+  # Frontend Next.js - Aplicação principal
+  - name: frontend
     source_dir: /
     github:
-      repo: oliveiratecnologia/criador-de-produto-main
+      repo: oliveiratecnologia/kvnlaunchv2
       branch: main
       deploy_on_push: true
-    build_command: npm install --production
-    run_command: node api/digitalocean-gateway.js
+    build_command: npm install && npm run build
+    run_command: npm start
     environment_slug: node-js
     instance_count: 1
     instance_size_slug: basic-xxs
     http_port: 3000
+    health_check:
+      http_path: /
+      initial_delay_seconds: 60
+      period_seconds: 30
+      timeout_seconds: 10
+      failure_threshold: 3
+      success_threshold: 2
+    routes:
+      - path: /
+
+  # API Gateway - Backend API
+  - name: api-gateway
+    source_dir: /
+    github:
+      repo: oliveiratecnologia/kvnlaunchv2
+      branch: main
+      deploy_on_push: true
+    build_command: npm install
+    run_command: PORT=8080 node api/digitalocean-gateway.js
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8080
     health_check:
       http_path: /health
       initial_delay_seconds: 30
@@ -54,34 +80,17 @@ services:
       failure_threshold: 3
       success_threshold: 2
     routes:
-      - path: /
-    cors:
-      allow_origins:
-        - exact: https://criador-de-produto-main.vercel.app
-        - exact: https://closify.com
-        - regex: https://.*\.vercel\.app
-      allow_methods:
-        - GET
-        - POST
-        - PUT
-        - PATCH
-        - DELETE
-        - OPTIONS
-      allow_headers:
-        - Content-Type
-        - Authorization
-        - X-API-Key
-      allow_credentials: true
+      - path: /api
 
 workers:
   # Workers BullMQ - Background Workers (SEM rotas HTTP)
   - name: ebook-workers
     source_dir: /
     github:
-      repo: oliveiratecnologia/criador-de-produto-main
+      repo: oliveiratecnologia/kvnlaunchv2
       branch: main
       deploy_on_push: true
-    build_command: npm install --production
+    build_command: npm install
     run_command: node workers/digitalocean-workers.js
     environment_slug: node-js
     instance_count: 1
